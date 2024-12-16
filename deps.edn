@@ -1,0 +1,11 @@
+{:paths ["src" "resources"]
+ :deps {org.clojure/clojure {:mvn/version "1.11.1"}
+        org.clojure/tools.cli {:mvn/version "1.0.219"}
+        dev.langchain4j/langchain4j {:mvn/version "0.36.2"}
+        dev.langchain4j/langchain4j-ollama {:mvn/version "0.36.2"}
+        dev.langchain4j/langchain4j-pgvector {:mvn/version "0.36.2"}
+        dev.langchain4j/langchain4j-core {:mvn/version "0.36.2"}}
+ :aliases
+ {:run-m {:main-opts ["-m" "populate-db"]}
+  :build {:deps {io.github.clojure/tools.build {:git/tag "v0.9.6" :git/sha "8e78bcc"}}
+          :ns-default build}}}

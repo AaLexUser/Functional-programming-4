@@ -1,0 +1,77 @@
+services:
+  # app:
+  #   build: .
+  #   environment:
+  #     - DB_HOST=postgres
+  #     - DB_PORT=5432
+  #     - DB_NAME=vectordb
+  #     - DB_USER=postgres
+  #     - DB_PASSWORD=postgres
+  #     - LANGCHAIN__EMBEDDING_MODEL__URL=http://ollama:11434
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #   networks:
+  #     - fpp
+  #   ports:
+  #     - "8080:8080"
+  #   volumes:
+  #     - ./target/inbound:/usr/src/app/target/inbound
+
+  postgres:
+    image: "pgvector/pgvector:0.8.0-pg17"
+    command: postgres -c shared_preload_libraries='vector,pg_stat_statements' -c pg_stat_statements.track=all
+    restart: always
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=vectordb
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - fpp
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  ollama:
+    image: ollama/ollama:latest
+    restart: always
+    environment:
+      - OLLAMA_KEEP_ALIVE=24h
+      - OLLAMA_HOST=0.0.0.0
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - fpp
+    ports:
+      - "11434:11434"
+
+  ollama_init:
+    image: curlimages/curl:latest
+    depends_on:
+      - ollama
+    entrypoint: /bin/sh -c
+    command: >
+      "
+        until curl -s -f -o /dev/null http://ollama:11434/api/version; do
+          echo 'Waiting for ollama to be ready...'
+          sleep 5
+        done && \
+        curl -X POST http://ollama:11434/api/pull -d '{\"name\": \"llama3.1\"}' && \
+        curl -X POST http://ollama:11434/api/pull -d '{\"name\": \"nomic-embed-text\"}'
+      "
+    networks:
+      - fpp
+
+networks:
+  fpp:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  ollama_data:
