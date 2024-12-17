@@ -1,27 +1,31 @@
 services:
-  # app:
-  #   build: .
-  #   environment:
-  #     - DB_HOST=postgres
-  #     - DB_PORT=5432
-  #     - DB_NAME=vectordb
-  #     - DB_USER=postgres
-  #     - DB_PASSWORD=postgres
-  #     - LANGCHAIN__EMBEDDING_MODEL__URL=http://ollama:11434
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #   networks:
-  #     - fpp
-  #   ports:
-  #     - "8080:8080"
-  #   volumes:
-  #     - ./target/inbound:/usr/src/app/target/inbound
+  app:
+    build: .
+    container_name: fp-app
+    restart: always
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=vectordb
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - OLLAMA_HOST=http://ollama:11434
+    command: "/bin/bash -c \"while sleep 1000; do :; done\""
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+    networks:
+      - fpp
+    volumes:
+      - ./data:/app/data
 
   postgres:
     image: "pgvector/pgvector:0.8.0-pg17"
-    command: postgres -c shared_preload_libraries='vector,pg_stat_statements' -c pg_stat_statements.track=all
+    container_name: fp-postgres
     restart: always
+    command: postgres -c shared_preload_libraries='vector,pg_stat_statements' -c pg_stat_statements.track=all
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
@@ -40,6 +44,7 @@ services:
 
   ollama:
     image: ollama/ollama:latest
+    container_name: fp-ollama
     restart: always
     environment:
       - OLLAMA_KEEP_ALIVE=24h

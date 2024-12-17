@@ -18,10 +18,9 @@
 ---
 
 Answer the question based on the above context: {{question}}
-Output format: markdown")
+Note to answer in language of question.
+Output format: terminal")
 
-(defprotocol Assistant
-  (chat [this message]))
 
 (defn get-chat-model []
   (-> (OllamaChatModel/builder)
@@ -35,33 +34,38 @@ Output format: markdown")
       (.embeddingStore (c/get-embedding-store))
       (.embeddingModel (c/get-embedding-model))
       (.maxResults (int 5))
-      .build))
-
-(defn create-assistant []
-  (-> (AiServices/builder Assistant)
-      (.chatLanguageModel (get-chat-model))
-      (.contentRetriever (create-content-retriever))
+      (.minScore 0.75)
       .build))
 
 (defn format-sources [results]
-  (map (fn [result]
-         {:id (-> result (get ".metadata"))
-          :content (.textSegment result)})
-       results))
+  (into [] (map (fn [result]
+                  {:id (.metadata (.textSegment result))
+                   :content (.text (.textSegment result))})
+                results)))
+
+(defn print-sources [results]
+  (apply str
+         "Sources:\n"
+         (for [result results]
+           (str "----\n"
+                "ID: " (.getString (.metadata (.textSegment result)) "index") "\n"
+                "Path: " (.getString (.metadata (.textSegment result)) "absolute_directory_path") "\n"
+                "Content: " (.text (.textSegment result)) "\n"
+                "----\n"))))
 
 (defn query-rag [query-text]
   (let [retriever (create-content-retriever)
         query (Query/from (str/trim query-text))
         results (.retrieve retriever query)
-        context (str/join "\n\n---\n\n" (map #(.textSegment %) results))
+        context (str/join "\n\n---\n\n" (map #(.text (.textSegment %)) results))
         prompt (-> (PromptTemplate/from prompt-template)
                    (.apply (java.util.HashMap. {"context" context
-                                              "question" query-text})))
-        _ (println "PROMPT:\n" prompt)
+                                                "question" query-text})))
+        ;; _ (println "PROMPT:\n" prompt)
         model (get-chat-model)
         response (.generate model [(UserMessage/from (.text prompt))])
         sources (format-sources results)]
-    (println (format "Response: %s\nSources: %s" (.text (.content response)) sources))
+    (println (format "Response: %s\n%s" (.text (.content response)) (print-sources results)))
     {:response (.text (.content response))
      :sources sources}))
 
@@ -72,5 +76,4 @@ Output format: markdown")
 (comment
   (let [retriever (create-content-retriever)
         query (Query/from "Цель курса")]
-    (.retrieve retriever query))
-  )
+    (.retrieve retriever query)))

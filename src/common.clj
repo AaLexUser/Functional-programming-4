@@ -2,7 +2,7 @@
   (:import dev.langchain4j.model.ollama.OllamaEmbeddingModel
            dev.langchain4j.store.embedding.pgvector.PgVectorEmbeddingStore))
 
-(def llm-base-url (or (System/getenv "LLM_HOST") "http://localhost:11434"))
+(def llm-base-url (or (System/getenv "OLLAMA_HOST") "http://localhost:11434"))
 (def llm-embedding-model (or (System/getenv "LLM_EMBEDDING_MODEL") "nomic-embed-text"))
 (def db-host (or (System/getenv "DB_HOST") "localhost"))
 (def db-port (Integer/parseInt (or (System/getenv "DB_PORT") "5432")))
