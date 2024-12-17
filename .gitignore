@@ -19,5 +19,5 @@ Thumbs.db
 .lsp/
 .nrepl-port
 
-*.py
+# *.py
 data/

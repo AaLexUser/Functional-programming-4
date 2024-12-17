@@ -4,6 +4,7 @@
         dev.langchain4j/langchain4j {:mvn/version "0.36.2"}
         dev.langchain4j/langchain4j-ollama {:mvn/version "0.36.2"}
         dev.langchain4j/langchain4j-pgvector {:mvn/version "0.36.2"}
+        dev.langchain4j/langchain4j-easy-rag {:mvn/version "0.36.2"}
         dev.langchain4j/langchain4j-core {:mvn/version "0.36.2"}}
  :aliases
  {:run-m {:main-opts ["-m" "populate-db"]}

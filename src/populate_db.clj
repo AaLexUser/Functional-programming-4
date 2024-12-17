@@ -1,41 +1,16 @@
 (ns populate-db
-  (:require [clojure.tools.cli :refer [parse-opts]])
+  (:require [clojure.tools.cli :refer [parse-opts]]
+            [common :refer [get-embedding-model get-embedding-store]])
   (:import dev.langchain4j.data.document.loader.FileSystemDocumentLoader
-           dev.langchain4j.model.ollama.OllamaEmbeddingModel
-           dev.langchain4j.store.embedding.pgvector.PgVectorEmbeddingStore
            dev.langchain4j.store.embedding.EmbeddingStoreIngestor
            dev.langchain4j.data.document.splitter.DocumentSplitters
            dev.langchain4j.data.document.parser.TextDocumentParser
-           java.nio.file.FileSystems))
+           java.nio.file.FileSystems
+           dev.langchain4j.data.segment.TextSegment))
 
 (def data-path "data")
 (def chunk-size 500)
 (def chunk-overlap 200)
-
-(def llm-base-url (or (System/getenv "LLM_HOST") "http://localhost:11434"))
-(def llm-embedding-model (or (System/getenv "LLM_EMBEDDING_MODEL") "nomic-embed-text"))
-(def db-host (or (System/getenv "DB_HOST") "localhost"))
-(def db-port (Integer/parseInt (or (System/getenv "DB_PORT") "5432")))
-(def db-name (or (System/getenv "DB_NAME") "vectordb"))
-(def db-user (or (System/getenv "DB_USER") "postgres"))
-(def db-password (or (System/getenv "DB_PASSWORD") "postgres"))
-
-(defn get-embedding-model []
-  (-> (OllamaEmbeddingModel/builder)
-      (.baseUrl llm-base-url)
-      (.modelName llm-embedding-model)
-      .build))
-
-(defn get-embedding-store []
-  (-> (PgVectorEmbeddingStore/builder)
-      (.host db-host)
-      (.port db-port)
-      (.database db-name)
-      (.user db-user)
-      (.password db-password)
-      (.table "embeddings")
-      (.dimension (.dimension (get-embedding-model)))
-      (.build)))
 
 
 (defn get-existing-ids [embedding-store]
@@ -73,23 +48,21 @@
            chunk))
        chunks))
 
-(defn ingest-documents [documents]
-  (let [chunks (split-text documents)
-        chunks-with-ids (calculate-chunk-ids chunks)
-        embedding-model (get-embedding-model)
-        embedding-store (get-embedding-store)
-        existing-ids (get-existing-ids embedding-store)
-        new-chunks (filter #(not (contains? existing-ids (.get (.metadata %) "id"))) chunks-with-ids)]
-    (println (str "Number of existing documents in DB: " (count existing-ids)))
-    (if (seq new-chunks)
-      (do
-        (println (str "👉 Adding new documents: " (count new-chunks)))
-        (let [ingestor (-> (EmbeddingStoreIngestor/builder)
-                           (.embeddingModel embedding-model)
-                           (.embeddingStore embedding-store)
-                           .build)]
-          (.ingest ingestor new-chunks)))
-      (println "✅ No new documents to add"))))
+(defn populate-db [documents]
+  (let [embedding-store (get-embedding-store)
+        embedding-model (get-embedding-model)]
+    (for [document documents]
+      (let [ingestor (-> (EmbeddingStoreIngestor/builder) 
+                         (.documentSplitter (DocumentSplitters/recursive chunk-size chunk-overlap))
+                         (.textSegmentTransformer (reify java.util.function.Function
+                                                  (apply [_ segment]
+                                                    (TextSegment/from
+                                                     (str (.metadata segment "file_name") "\n" (.text segment))
+                                                     (.metadata segment)))))
+                         (.embeddingModel embedding-model)
+                         (.embeddingStore embedding-store)
+                         .build)]
+        (.ingest ingestor document)))))
 
 (defn -main [& args]
   (let [cli-options [["-r" "--reset" "Reset the database"]]
@@ -97,5 +70,18 @@
     (when (:reset options)
       (clear-database))
     (let [documents (load-documents)]
-      (ingest-documents documents)
+      (populate-db documents)
       (println "✨ Done populating database"))))
+
+(comment 
+  (let [documents (load-documents)]
+    (for [document documents]
+      (let [ingestor embedding-store]
+        (.ingest ingestor document)))))
+
+(def embedding-store
+  (-> (EmbeddingStoreIngestor/builder)
+      (.documentSplitter (DocumentSplitters/recursive chunk-size chunk-overlap))
+      (.embeddingModel (get-embedding-model))
+      (.embeddingStore (get-embedding-store))
+      .build))
